@@ -1,0 +1,184 @@
+#block-details {
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--page-x) + 2.5rem) var(--page-x) var(--page-x) 0;
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  scrollbar-width: none;
+
+  .dim {
+    opacity: 0.5;
+  }
+
+  :is(h1, h2, p, dl, dd) {
+    margin: 0;
+  }
+
+  > header {
+    display: grid;
+    gap: 0.5rem;
+    padding-bottom: 1.25rem;
+
+    h1 {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35em;
+      align-items: baseline;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-family: var(--font-mono);
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .title-label {
+      font-family: var(--font-serif);
+      font-size: 2.5rem;
+      font-style: italic;
+      line-height: 0.9;
+      text-transform: lowercase;
+    }
+
+    .title-height {
+      color: var(--gray);
+      font-size: var(--font-size-lg);
+      line-height: var(--line-height-lg);
+    }
+
+    p {
+      color: var(--gray);
+    }
+  }
+
+  > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  section {
+    display: grid;
+    align-content: start;
+    gap: 0.75rem;
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--gray) 18%, transparent);
+    border-radius: 0.5rem;
+    padding: 1rem;
+
+    &[data-group="overview"] {
+      grid-column: 1 / -1;
+    }
+
+    &[data-group="mining"] {
+      border-color: color-mix(in oklch, var(--orange) 34%, transparent);
+
+      h2 {
+        color: var(--orange);
+      }
+    }
+
+    &[data-group="transactions"] {
+      border-color: color-mix(in oklch, var(--cyan) 28%, transparent);
+
+      h2 {
+        color: var(--cyan);
+      }
+    }
+
+    &[data-group="fees"] {
+      border-color: color-mix(in oklch, var(--green) 28%, transparent);
+
+      h2 {
+        color: var(--green);
+      }
+
+      figure[data-fee-chart] {
+        --chart-xy-height: 7.5rem;
+      }
+    }
+
+    &[data-group="size"] {
+      border-color: color-mix(in oklch, var(--blue) 28%, transparent);
+
+      h2 {
+        color: var(--blue);
+      }
+    }
+  }
+
+  h2 {
+    color: var(--gray);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: 450;
+    line-height: var(--line-height-xs);
+    text-transform: uppercase;
+  }
+
+  dl {
+    display: grid;
+
+    > div {
+      display: grid;
+      grid-template-columns: minmax(6rem, 0.36fr) minmax(0, 1fr);
+      gap: 0.75rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid
+        color-mix(in oklch, var(--gray) 12%, transparent);
+
+      &:first-child {
+        padding-top: 0;
+      }
+
+      &:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+    }
+  }
+
+  dt {
+    color: var(--gray);
+  }
+
+  dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-xs);
+  }
+}
+
+@media (max-width: 48rem) {
+  #block-details {
+    min-width: 0;
+    height: auto;
+    padding: 1rem var(--page-x) var(--page-x);
+
+    > div {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    section[data-group="overview"] {
+      grid-column: auto;
+    }
+
+    dl > div {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.15rem;
+    }
+
+    dd {
+      text-align: left;
+    }
+  }
+}

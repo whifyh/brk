@@ -4,6 +4,10 @@
   --cube-empty-alpha: 0.4;
   --face-step: 0.033;
 
+  &:not(.loading) .cube[data-enter] {
+    animation: confirmed-cube-enter 180ms ease-out both;
+  }
+
   .cube {
     --cube-width: calc(var(--cube-size) * 2 * var(--iso-scale));
     --cube-height: calc(var(--cube-size) * 2);
@@ -23,6 +27,16 @@
     );
     --face-bottom: oklch(
       from var(--cube-face-base) calc(l - var(--face-step) * 3) c h
+    );
+    --state-face-top: var(--face-color-base);
+    --state-face-right: oklch(
+      from var(--face-color-base) calc(l - var(--face-step) * 2) c h
+    );
+    --state-face-left: oklch(
+      from var(--face-color-base) calc(l - var(--face-step)) c h
+    );
+    --state-face-bottom: oklch(
+      from var(--face-color-base) calc(l - var(--face-step) * 3) c h
     );
 
     --is-full: round(down, var(--fill), 1);
@@ -47,16 +61,10 @@
       &:is(button):hover {
         color: var(--background-color);
         --face-color-base: var(--inv-border-color);
-        --face-top: var(--face-color-base);
-        --face-right: oklch(
-          from var(--face-color-base) calc(l - var(--face-step) * 2) c h
-        );
-        --face-left: oklch(
-          from var(--face-color-base) calc(l - var(--face-step)) c h
-        );
-        --face-bottom: oklch(
-          from var(--face-color-base) calc(l - var(--face-step) * 3) c h
-        );
+        --face-top: var(--state-face-top);
+        --face-right: var(--state-face-right);
+        --face-left: var(--state-face-left);
+        --face-bottom: var(--state-face-bottom);
       }
     }
 
@@ -64,35 +72,28 @@
     &.selected {
       color: var(--black);
       --face-color-base: var(--orange);
-      --face-top: var(--face-color-base);
-      --face-right: oklch(
-        from var(--face-color-base) calc(l - var(--face-step) * 2) c h
-      );
-      --face-left: oklch(
-        from var(--face-color-base) calc(l - var(--face-step)) c h
-      );
-      --face-bottom: oklch(
-        from var(--face-color-base) calc(l - var(--face-step) * 3) c h
-      );
     }
 
     &[data-press]:not(.selected) {
       color: var(--background-color);
       --face-color-base: var(--inv-border-color);
-      --face-top: var(--face-color-base);
-      --face-right: oklch(
-        from var(--face-color-base) calc(l - var(--face-step) * 2) c h
-      );
-      --face-left: oklch(
-        from var(--face-color-base) calc(l - var(--face-step)) c h
-      );
-      --face-bottom: oklch(
-        from var(--face-color-base) calc(l - var(--face-step) * 3) c h
-      );
+    }
+
+    &:is(button):active,
+    &.selected,
+    &[data-press]:not(.selected) {
+      --face-top: var(--state-face-top);
+      --face-right: var(--state-face-right);
+      --face-left: var(--state-face-left);
+      --face-bottom: var(--state-face-bottom);
     }
 
     &.projected {
       animation: projected-cube-pulse 4s ease-in-out infinite;
+    }
+
+    &[data-placeholder] {
+      visibility: hidden;
     }
 
     &.skeleton .face-text {
@@ -232,6 +233,18 @@
     .liquid.top {
       --face-x: calc(1 - var(--fill));
     }
+  }
+}
+
+@keyframes confirmed-cube-enter {
+  from {
+    opacity: 0;
+    scale: 0.98;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
   }
 }
 

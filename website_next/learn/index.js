@@ -1,6 +1,6 @@
 import { createContents } from "./contents/index.js";
 import { sections } from "./data/index.js";
-import { createChart } from "./charts/index.js";
+import { createChart } from "../chart/index.js";
 import { initSectionDetails } from "./details.js";
 import { initHashLinks } from "./hash-links.js";
 import { initScrollSpy } from "./scroll-spy.js";

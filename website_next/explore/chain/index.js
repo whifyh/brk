@@ -2,7 +2,9 @@ import { brk } from "../../utils/client.js";
 import { isPlainLeftClick } from "../../utils/event.js";
 import { createCubeButton, createCubeDiv } from "./cube/index.js";
 
-const LOOKAHEAD = 15;
+const BLOCK_BATCH_SIZE = 15;
+const EDGE_LOAD_DISTANCE = 50;
+const OLDER_RESERVE_VIEWPORTS = 6;
 const POLL_INTERVAL = 1_000;
 const PROJECTED_LIMIT = 8;
 const TARGET_BLOCK_SECONDS = 600;
@@ -24,6 +26,7 @@ const MONTHS = /** @type {const} */ ([
 
 /** @typedef {Awaited<ReturnType<typeof brk.getBlocksV1>>[number]} Block */
 /** @typedef {Awaited<ReturnType<typeof brk.getMempoolBlocks>>[number]} MempoolBlock */
+/** @typedef {{ generation: number, startHeight: number, placeholders: HTMLElement[] }} OlderBatch */
 
 /** @param {number} rate */
 function formatFeeRate(rate) {
@@ -42,7 +45,6 @@ function createHeightElement(height) {
   const value = document.createElement("span");
 
   prefix.classList.add("dim");
-  prefix.style.userSelect = "none";
   prefix.textContent = `#${"0".repeat(Math.max(0, 7 - String(height).length))}`;
   value.textContent = String(height);
   container.append(prefix, value);
@@ -113,16 +115,19 @@ function createEdgeButton(className, label, mobileLabel, title, handler) {
   return button;
 }
 
-export function createChain() {
+/**
+ * @param {{ onSelect?: (block: Block) => void }} [options]
+ */
+export function createChain({ onSelect = () => {} } = {}) {
   const element = document.createElement("div");
   const scrollElement = document.createElement("div");
   const blocksElement = document.createElement("div");
   const tipButton = createEdgeButton("tip", "↑", "←", "Jump to chain tip", () => {
-    void goToCube(null);
+    jumpToTip();
   });
 
   element.id = "chain";
-  tipButton.hidden = true;
+  setTipVisible(false);
   scrollElement.classList.add("scroll");
   blocksElement.classList.add("blocks");
   scrollElement.append(blocksElement);
@@ -130,9 +135,8 @@ export function createChain() {
 
   /** @type {HTMLButtonElement | null} */
   let selectedCube = null;
-
-  /** @type {IntersectionObserver | undefined} */
-  let olderEdgeObserver;
+  /** @type {HTMLButtonElement | null} */
+  let tipCube = null;
 
   /** @type {Map<string, Block>} */
   const blocksByHash = new Map();
@@ -143,15 +147,23 @@ export function createChain() {
   let active = false;
   let newestHeight = -1;
   let oldestHeight = Infinity;
+  let oldestReservedHeight = -1;
   let newestTimestamp = 0;
-  let loadingOlder = false;
+  let hydratingOlder = false;
   let loadingNewer = false;
   let polling = false;
   let reachedTip = false;
+  let olderGeneration = 0;
+
+  /** @type {OlderBatch[]} */
+  const olderBatches = [];
 
   /** @type {number | undefined} */
   let pollId;
+  /** @type {number | undefined} */
+  let jumpTimeout;
   let tipSyncFrame = 0;
+  let jumping = false;
 
   /** @type {AbortController} */
   let controller = new AbortController();
@@ -164,9 +176,9 @@ export function createChain() {
 
     const attribute = typeof hashOrHeight === "number" ? "height" : "hash";
 
-      return /** @type {HTMLButtonElement | null} */ (
-        blocksElement.querySelector(`[data-${attribute}="${hashOrHeight}"]`)
-      );
+    return /** @type {HTMLButtonElement | null} */ (
+      blocksElement.querySelector(`[data-${attribute}="${hashOrHeight}"]`)
+    );
   }
 
   function firstProjectedCube() {
@@ -188,7 +200,87 @@ export function createChain() {
     selectedCube = null;
   }
 
-  /** @param {HTMLButtonElement} cube @param {{ scroll?: "smooth" | "instant" }} [options] */
+  function updateTipCube() {
+    tipCube?.removeAttribute("data-tip");
+    tipCube = newestConfirmedCube();
+    tipCube?.setAttribute("data-tip", "");
+  }
+
+  function jumpToTip() {
+    if (!tipCube || jumping) return;
+
+    jumping = true;
+
+    element.classList.add("jumping");
+    element.addEventListener("transitionend", finishJumpToTip);
+    jumpTimeout = window.setTimeout(
+      finishJumpToTip,
+      transitionMs(element, "opacity") + 50,
+    );
+  }
+
+  /** @param {Event} [event] */
+  function finishJumpToTip(event) {
+    if (
+      event instanceof TransitionEvent &&
+      (event.target !== element || event.propertyName !== "opacity")
+    ) {
+      return;
+    }
+
+    if (tipCube) selectCube(tipCube, { scroll: "instant" });
+
+    cancelJump();
+  }
+
+  function cancelJump() {
+    if (jumpTimeout !== undefined) {
+      window.clearTimeout(jumpTimeout);
+      jumpTimeout = undefined;
+    }
+
+    element.removeEventListener("transitionend", finishJumpToTip);
+    element.classList.remove("jumping");
+    jumping = false;
+  }
+
+  /**
+   * @param {Element} element
+   * @param {string} property
+   */
+  function transitionMs(element, property) {
+    const style = getComputedStyle(element);
+    const properties = style.transitionProperty.split(",").map((part) => {
+      return part.trim();
+    });
+    const durations = parseCssTimes(style.transitionDuration);
+    const delays = parseCssTimes(style.transitionDelay);
+    const index = properties.findIndex((part) => {
+      return part === property || part === "all";
+    });
+
+    if (index < 0) return 0;
+
+    const duration = durations[index] ?? durations.at(-1) ?? 0;
+    const delay = delays[index] ?? delays.at(-1) ?? 0;
+
+    return duration + delay;
+  }
+
+  /** @param {string} value */
+  function parseCssTimes(value) {
+    return value.split(",").map((part) => {
+      const time = part.trim();
+      const amount = Number.parseFloat(time);
+
+      return time.endsWith("ms") ? amount : amount * 1_000;
+    });
+  }
+
+  /**
+   * @param {HTMLButtonElement} cube
+   * @param {{ scroll?: "smooth" | "instant" }} [options]
+   */
   function selectCube(cube, { scroll } = {}) {
     if (cube !== selectedCube) {
       deselectCube();
@@ -196,36 +288,133 @@ export function createChain() {
       cube.classList.add("selected");
     }
 
+    const hash = cube.dataset.hash;
+    const block = hash ? blocksByHash.get(hash) : undefined;
+    if (block) onSelect(block);
+
     if (scroll) {
-      cube.scrollIntoView({
-        behavior: scroll,
-        block: "center",
-        inline: "center",
-      });
+      scrollToElement(cube, scroll);
       scheduleTipVisibilitySync();
+    }
+  }
+
+  /**
+   * @param {Element} target
+   * @param {"smooth" | "instant"} behavior
+   */
+  function scrollToElement(target, behavior) {
+    target.scrollIntoView({
+      behavior,
+      block: "center",
+      inline: "center",
+    });
+  }
+
+  /**
+   * @param {Element | null | undefined} anchor
+   * @param {DOMRect | undefined} anchorRect
+   */
+  function preserveScrollPosition(anchor, anchorRect) {
+    if (!anchor || !anchorRect) return;
+
+    const rect = anchor.getBoundingClientRect();
+
+    scrollElement.scrollTop += rect.top - anchorRect.top;
+    scrollElement.scrollLeft += rect.left - anchorRect.left;
+  }
+
+  function isHorizontal() {
+    return getComputedStyle(blocksElement).flexDirection.startsWith("row");
+  }
+
+  /** @param {boolean} horizontal */
+  function olderRemaining(horizontal) {
+    return horizontal
+      ? scrollElement.scrollWidth -
+          scrollElement.clientWidth -
+          scrollElement.scrollLeft
+      : scrollElement.scrollHeight -
+          scrollElement.clientHeight -
+          scrollElement.scrollTop;
+  }
+
+  /** @param {boolean} horizontal */
+  function olderRunway(horizontal) {
+    return (
+      (horizontal ? scrollElement.clientWidth : scrollElement.clientHeight) *
+      OLDER_RESERVE_VIEWPORTS
+    );
+  }
+
+  /** @param {number} [delta] */
+  function reserveOlderRunway(delta = 0) {
+    if (!active || oldestReservedHeight <= 0) return;
+
+    const horizontal = isHorizontal();
+    const runway = olderRunway(horizontal) + delta;
+    let remaining = olderRemaining(horizontal);
+
+    while (remaining < runway) {
+      if (!reserveOlderBatch()) return;
+      remaining = olderRemaining(horizontal);
     }
   }
 
   function clear() {
     newestHeight = -1;
     oldestHeight = Infinity;
+    oldestReservedHeight = -1;
     newestTimestamp = 0;
-    loadingOlder = false;
+    hydratingOlder = false;
     loadingNewer = false;
     reachedTip = false;
+    olderGeneration++;
     selectedCube = null;
+    tipCube = null;
     blocksByHash.clear();
     blocksElement.textContent = "";
     projectedCubes.length = 0;
-    tipButton.hidden = true;
-    olderEdgeObserver?.disconnect();
+    olderBatches.length = 0;
+    setTipVisible(false);
   }
 
-  function observeOldestEdge() {
-    olderEdgeObserver?.disconnect();
+  /**
+   * @param {Element | null} anchor
+   * @param {number} count
+   */
+  function prependOlderPlaceholders(anchor, count) {
+    const fragment = document.createDocumentFragment();
+    const placeholders = /** @type {HTMLElement[]} */ ([]);
 
-    const oldest = blocksElement.firstElementChild;
-    if (oldest) olderEdgeObserver?.observe(oldest);
+    for (let i = 0; i < count; i++) {
+      const cube = document.createElement("div");
+
+      cube.classList.add("cube");
+      cube.dataset.placeholder = "";
+      placeholders.push(cube);
+      fragment.append(cube);
+    }
+
+    blocksElement.insertBefore(fragment, anchor);
+
+    return placeholders;
+  }
+
+  function reserveOlderBatch() {
+    if (!active || oldestReservedHeight <= 0) return false;
+
+    const anchor = blocksElement.firstElementChild;
+    const count = Math.min(BLOCK_BATCH_SIZE, oldestReservedHeight);
+    const startHeight = oldestReservedHeight - 1;
+    const placeholders = prependOlderPlaceholders(anchor, count);
+
+    if (!placeholders.length) return false;
+
+    oldestReservedHeight -= placeholders.length;
+    olderBatches.push({ generation: olderGeneration, startHeight, placeholders });
+    void hydrateOlderBatches();
+
+    return true;
   }
 
   /** @param {Block[]} blocks */
@@ -239,7 +428,7 @@ export function createChain() {
       const block = blocks[i];
 
       if (block.height > newestHeight) {
-        appendConfirmed(createConfirmedCube(block));
+        appendConfirmed(createEnteringConfirmedCube(block));
       } else {
         blocksByHash.set(block.id, block);
       }
@@ -247,13 +436,10 @@ export function createChain() {
 
     newestHeight = Math.max(newestHeight, blocks[0].height);
     newestTimestamp = blocks[0].timestamp;
+    updateTipCube();
     refreshProjected();
 
-    if (anchor && anchorRect) {
-      const rect = anchor.getBoundingClientRect();
-      scrollElement.scrollTop += rect.top - anchorRect.top;
-      scrollElement.scrollLeft += rect.left - anchorRect.left;
-    }
+    preserveScrollPosition(anchor, anchorRect);
 
     syncTipVisibility();
 
@@ -269,13 +455,17 @@ export function createChain() {
 
     clear();
 
-    for (const block of blocks) prependConfirmed(createConfirmedCube(block));
+    for (const block of blocks) {
+      prependConfirmed(createEnteringConfirmedCube(block));
+    }
 
     newestHeight = blocks[0].height;
     oldestHeight = blocks[blocks.length - 1].height;
+    oldestReservedHeight = oldestHeight;
     newestTimestamp = blocks[0].timestamp;
     reachedTip = height == null;
-    observeOldestEdge();
+    updateTipCube();
+    reserveOlderRunway();
 
     if (reachedTip) await pollProjected();
     else await loadNewer();
@@ -362,26 +552,65 @@ export function createChain() {
     }
   }
 
-  async function loadOlder() {
-    if (!active || loadingOlder || oldestHeight <= 0) return;
+  async function hydrateOlderBatches() {
+    if (hydratingOlder) return;
 
-    loadingOlder = true;
+    const generation = olderGeneration;
+
+    hydratingOlder = true;
 
     try {
-      const blocks = await brk.getBlocksV1FromHeight(oldestHeight - 1, {
+      while (
+        active &&
+        generation === olderGeneration &&
+        olderBatches[0]?.generation === generation
+      ) {
+        await hydrateOlderBatch(olderBatches[0]);
+        if (olderBatches[0]?.generation === generation) olderBatches.shift();
+      }
+    } finally {
+      if (generation === olderGeneration) hydratingOlder = false;
+    }
+  }
+
+  /** @param {OlderBatch} batch */
+  async function hydrateOlderBatch(batch) {
+    try {
+      const blocks = await brk.getBlocksV1FromHeight(batch.startHeight, {
         signal: controller.signal,
       });
 
-      for (const block of blocks) prependConfirmed(createConfirmedCube(block));
+      if (!batch.placeholders.some((placeholder) => placeholder.isConnected)) {
+        return;
+      }
+
+      const cubes = [...blocks].reverse().map(createEnteringConfirmedCube);
+
+      for (let i = 0; i < batch.placeholders.length; i++) {
+        const cube = cubes[i];
+
+        if (cube) batch.placeholders[i].replaceWith(cube);
+        else batch.placeholders[i].remove();
+      }
+
+      for (const cube of cubes) setConfirmedInterval(cube);
+
+      const next = cubes.at(-1)?.nextElementSibling;
+      if (next instanceof HTMLElement) setConfirmedInterval(next);
 
       if (blocks.length) {
         oldestHeight = blocks[blocks.length - 1].height;
-        observeOldestEdge();
+      } else {
+        oldestReservedHeight = oldestHeight;
       }
+
+      reserveOlderRunway();
     } catch (error) {
-      if (!controller.signal.aborted) console.error("explore older:", error);
-    } finally {
-      loadingOlder = false;
+      if (!controller.signal.aborted) {
+        for (const placeholder of batch.placeholders) placeholder.remove();
+        oldestReservedHeight = oldestHeight;
+        console.error("explore older:", error);
+      }
     }
   }
 
@@ -393,7 +622,7 @@ export function createChain() {
     try {
       const prevNewest = newestHeight;
       const blocks = await brk.getBlocksV1FromHeight(
-        newestHeight + LOOKAHEAD,
+        newestHeight + BLOCK_BATCH_SIZE,
         { signal: controller.signal },
       );
 
@@ -406,6 +635,27 @@ export function createChain() {
     } finally {
       loadingNewer = false;
     }
+  }
+
+  /** @param {HTMLElement} cube */
+  function markCubeEntering(cube) {
+    cube.dataset.enter = "";
+    cube.addEventListener(
+      "animationend",
+      () => {
+        cube.removeAttribute("data-enter");
+      },
+      { once: true },
+    );
+  }
+
+  /** @param {Block} block */
+  function createEnteringConfirmedCube(block) {
+    const cube = createConfirmedCube(block);
+
+    markCubeEntering(cube);
+
+    return cube;
   }
 
   /** @param {Block} block */
@@ -467,7 +717,7 @@ export function createChain() {
   /** @param {HTMLElement} cube */
   function setConfirmedInterval(cube) {
     const prev = /** @type {HTMLElement | null} */ (cube.previousElementSibling);
-    if (!prev) return;
+    if (!prev?.dataset.timestamp) return;
 
     cube.style.setProperty(
       "--block-interval",
@@ -514,6 +764,7 @@ export function createChain() {
       updateProjectedCube(projectedCubes[i], blocks[i]);
     }
 
+    updateTipCube();
     refreshProjected();
   }
 
@@ -577,6 +828,7 @@ export function createChain() {
 
     const now = Math.floor(Date.now() / 1_000);
     const elapsed = Math.max(0, now - newestTimestamp);
+    const updateLayout = !tipButton.hasAttribute("data-visible");
 
     for (let i = 0; i < projectedCubes.length; i++) {
       const cube = projectedCubes[i];
@@ -584,7 +836,10 @@ export function createChain() {
       const timestamp = now + i * TARGET_BLOCK_SECONDS;
       const [hh, mm] = formatHHMM(timestamp);
 
-      cube.element.style.setProperty("--block-interval", String(interval));
+      if (updateLayout) {
+        cube.element.style.setProperty("--block-interval", String(interval));
+      }
+
       cube.parts.date.nodeValue = formatShortDate(timestamp);
       cube.parts.hh.nodeValue = hh;
       cube.parts.mm.nodeValue = mm;
@@ -600,70 +855,104 @@ export function createChain() {
     });
   }
 
+  /** @param {boolean} visible */
+  function setTipVisible(visible) {
+    tipButton.toggleAttribute("data-visible", visible);
+    tipButton.setAttribute("aria-hidden", String(!visible));
+    tipButton.tabIndex = visible ? 0 : -1;
+  }
+
   function syncTipVisibility() {
-    if (!reachedTip || newestHeight < 0) {
-      tipButton.hidden = true;
+    if (!reachedTip || newestHeight < 0 || !tipCube) {
+      setTipVisible(false);
       return;
     }
 
     const visibleHeight = findVisibleConfirmedHeight();
-    tipButton.hidden =
-      visibleHeight == null ||
-      newestHeight - visibleHeight <= TIP_BLOCK_THRESHOLD;
+    if (projectedCubes.some(({ element }) => isElementVisible(element))) {
+      setTipVisible(false);
+      return;
+    }
+
+    setTipVisible(
+      visibleHeight != null
+        ? newestHeight - visibleHeight > TIP_BLOCK_THRESHOLD
+        : !isElementVisible(tipCube),
+    );
+  }
+
+  /** @param {Element} element */
+  function distanceFromViewport(element) {
+    const viewport = scrollElement.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    const horizontal = isHorizontal();
+
+    if (horizontal) {
+      if (rect.left > viewport.right) return rect.left - viewport.right;
+      if (rect.right < viewport.left) return viewport.left - rect.right;
+      return 0;
+    }
+
+    if (rect.top > viewport.bottom) return rect.top - viewport.bottom;
+    if (rect.bottom < viewport.top) return viewport.top - rect.bottom;
+    return 0;
+  }
+
+  /** @param {Element} element */
+  function isElementVisible(element) {
+    return distanceFromViewport(element) === 0;
+  }
+
+  function shouldLoadNewer() {
+    const cube = newestConfirmedCube();
+
+    return cube != null && distanceFromViewport(cube) <= EDGE_LOAD_DISTANCE;
   }
 
   function findVisibleConfirmedHeight() {
     const viewport = scrollElement.getBoundingClientRect();
-    const horizontal = getComputedStyle(blocksElement).flexDirection.startsWith(
-      "row",
-    );
-    const viewportStart = horizontal ? viewport.left : viewport.top;
-    const viewportEnd = horizontal ? viewport.right : viewport.bottom;
-    const target = (viewportStart + viewportEnd) / 2;
+    const x = (viewport.left + viewport.right) / 2;
+    const y = (viewport.top + viewport.bottom) / 2;
 
-    let closestHeight = null;
-    let closestDistance = Infinity;
+    for (const element of document.elementsFromPoint(x, y)) {
+      const cube = element.closest(".cube[data-height]");
 
-    for (const element of blocksElement.children) {
       if (
-        !(element instanceof HTMLElement) ||
-        element.classList.contains("projected")
+        cube instanceof HTMLElement &&
+        blocksElement.contains(cube) &&
+        !cube.classList.contains("projected")
       ) {
-        continue;
+        return Number(cube.dataset.height);
       }
-
-      const rect = element.getBoundingClientRect();
-      const start = horizontal ? rect.left : rect.top;
-      const end = horizontal ? rect.right : rect.bottom;
-
-      if (end < viewportStart || start > viewportEnd) continue;
-
-      const distance = Math.abs((start + end) / 2 - target);
-      if (distance >= closestDistance) continue;
-
-      closestDistance = distance;
-      closestHeight = Number(element.dataset.height);
     }
 
-    return closestHeight;
+    return null;
   }
 
-  olderEdgeObserver = new IntersectionObserver(
-    (entries) => {
-      if (entries[0]?.isIntersecting) void loadOlder();
+  /** @param {WheelEvent} event */
+  function olderWheelDelta(event) {
+    return Math.max(
+      0,
+      isHorizontal() ? Math.max(event.deltaX, event.deltaY) : event.deltaY,
+    );
+  }
+
+  scrollElement.addEventListener(
+    "wheel",
+    (event) => {
+      reserveOlderRunway(olderWheelDelta(event));
     },
-    { root: scrollElement },
+    { passive: true },
   );
 
   scrollElement.addEventListener(
     "scroll",
     () => {
       scheduleTipVisibilitySync();
+      reserveOlderRunway();
 
       if (reachedTip || loadingNewer) return;
-      if (scrollElement.scrollTop <= 50 && scrollElement.scrollLeft <= 50) {
-        void loadNewer();
-      }
+      if (shouldLoadNewer()) void loadNewer();
     },
     { passive: true },
   );
@@ -694,6 +983,7 @@ export function createChain() {
       tipSyncFrame = 0;
     }
 
+    cancelJump();
     controller.abort();
   }
 
