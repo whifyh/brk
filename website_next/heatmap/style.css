@@ -1,0 +1,30 @@
+[data-heatmap] {
+  --heatmap-cell-size: 0.4rem;
+  --heatmap-gap: 2px;
+
+  position: relative;
+  min-width: 0;
+}
+
+[data-heatmap-cell] {
+  position: absolute;
+  left: var(--x);
+  width: var(--size);
+  height: var(--size);
+  background: var(--color);
+}
+
+[data-heatmap="bottom"] > [data-heatmap-cell] {
+  bottom: var(--y);
+}
+
+[data-heatmap=""] > [data-heatmap-cell] {
+  top: var(--y);
+}
+
+[data-heatmap-measure] {
+  position: absolute;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}

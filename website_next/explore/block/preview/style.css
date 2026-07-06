@@ -1,0 +1,30 @@
+[data-block-preview] {
+  display: grid;
+  min-width: 0;
+}
+
+[data-block-preview-figure] {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+[data-block-preview-legend] {
+  display: grid;
+  min-width: 0;
+
+  > h5 {
+    color: var(--white);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-regular);
+    line-height: var(--line-height-sm);
+    text-transform: uppercase;
+  }
+}
+
+[data-block-preview-status] {
+  color: var(--gray);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  text-transform: uppercase;
+}

@@ -1,3 +1,5 @@
+import { waitForTransition } from "../utils/transition.js";
+
 /** @param {MouseEvent} event */
 function closeOnBackdrop(event) {
   const dialog = /** @type {HTMLDialogElement} */ (event.currentTarget);
@@ -11,7 +13,10 @@ function closeOnBackdrop(event) {
  */
 export function openDialog(dialog, host) {
   host.append(dialog);
-  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  dialog.addEventListener("close", async () => {
+    await waitForTransition();
+    dialog.remove();
+  }, { once: true });
   dialog.addEventListener("click", closeOnBackdrop);
   dialog.showModal();
 }
