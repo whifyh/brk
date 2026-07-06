@@ -6,47 +6,5 @@ body {
     z-index: var(--layer-header);
     line-height: 1;
     mix-blend-mode: difference;
-
-    > a {
-      --color: var(--white);
-      opacity: 0.8;
-
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: var(--color);
-      font-size: var(--font-size-base);
-      text-decoration: none;
-      text-transform: lowercase;
-
-      @media (hover: hover) and (pointer: fine) {
-        &:hover {
-          opacity: 1;
-        }
-      }
-
-      &:active {
-        opacity: 1;
-        --color: var(--orange);
-      }
-
-      &[data-press] {
-        opacity: 1;
-        --color: var(--white);
-      }
-
-      > span {
-        display: inline-grid;
-        padding: 0.2rem 0.3rem;
-        color: var(--black);
-        background-color: var(--color);
-        border-radius: 0.25rem;
-      }
-
-      .cube {
-        --size: 0.75rem;
-        animation: cube-fill 5s linear infinite alternate;
-      }
-    }
   }
 }

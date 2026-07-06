@@ -42,7 +42,7 @@
   background: none;
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  font-weight: 450;
+  font-weight: var(--font-weight-strong);
   line-height: var(--line-height-xs);
   text-align: left;
   text-transform: uppercase;

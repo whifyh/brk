@@ -18,7 +18,7 @@ import {
   preserveScrollPosition,
   scrollToElement,
 } from "./scroll.js";
-import { transitionMs } from "./transition.js";
+import { createJumpController } from "./jump.js";
 
 const BLOCK_BATCH_SIZE = 15;
 const EDGE_LOAD_DISTANCE = 50;
@@ -32,6 +32,16 @@ const TIP_BLOCK_THRESHOLD = 10;
 /** @typedef {Awaited<ReturnType<typeof brk.getMempoolBlocks>>[number]} MempoolBlock */
 /** @typedef {{ generation: number, startHeight: number, placeholders: HTMLElement[] }} OlderBatch */
 
+/** @param {string | number | null | undefined} hashOrHeight */
+function normalizeTarget(hashOrHeight) {
+  if (hashOrHeight === "tip") return null;
+  if (typeof hashOrHeight === "string" && /^\d+$/.test(hashOrHeight)) {
+    return Number(hashOrHeight);
+  }
+
+  return hashOrHeight;
+}
+
 /**
  * @param {{ onSelect?: (block: Block) => void }} [options]
  */
@@ -41,6 +51,9 @@ export function createChain({ onSelect = () => {} } = {}) {
   const blocksElement = document.createElement("div");
   const tipButton = createEdgeButton("tip", "↑", "←", "Jump to chain tip", () => {
     jumpToTip();
+  });
+  const jump = createJumpController(element, () => {
+    if (tipCube) selectCube(tipCube, { scroll: "instant" });
   });
 
   element.id = "chain";
@@ -77,13 +90,18 @@ export function createChain({ onSelect = () => {} } = {}) {
 
   /** @type {number | undefined} */
   let pollId;
-  /** @type {number | undefined} */
-  let jumpTimeout;
   let tipSyncFrame = 0;
-  let jumping = false;
 
   /** @type {AbortController} */
   let controller = new AbortController();
+
+  /**
+   * @param {string} label
+   * @param {unknown} error
+   */
+  function logChainError(label, error) {
+    if (!controller.signal.aborted) console.error(label, error);
+  }
 
   /** @param {string | number | null | undefined} hashOrHeight */
   function findCube(hashOrHeight) {
@@ -124,41 +142,7 @@ export function createChain({ onSelect = () => {} } = {}) {
   }
 
   function jumpToTip() {
-    if (!tipCube || jumping) return;
-
-    jumping = true;
-
-    element.dataset.jumping = "";
-    element.addEventListener("transitionend", finishJumpToTip);
-    jumpTimeout = window.setTimeout(
-      finishJumpToTip,
-      transitionMs(element, "opacity") + 50,
-    );
-  }
-
-  /** @param {Event} [event] */
-  function finishJumpToTip(event) {
-    if (
-      event instanceof TransitionEvent &&
-      (event.target !== element || event.propertyName !== "opacity")
-    ) {
-      return;
-    }
-
-    if (tipCube) selectCube(tipCube, { scroll: "instant" });
-
-    cancelJump();
-  }
-
-  function cancelJump() {
-    if (jumpTimeout !== undefined) {
-      window.clearTimeout(jumpTimeout);
-      jumpTimeout = undefined;
-    }
-
-    element.removeEventListener("transitionend", finishJumpToTip);
-    delete element.dataset.jumping;
-    jumping = false;
+    if (tipCube) jump.jump();
   }
 
   /**
@@ -179,6 +163,14 @@ export function createChain({ onSelect = () => {} } = {}) {
     if (scroll) {
       scrollToElement(cube, scroll);
       scheduleTipVisibilitySync();
+    }
+  }
+
+  function markConfirmedSkeletons() {
+    for (const cube of blocksElement.children) {
+      if (!cube.hasAttribute("data-projected")) {
+        cube.setAttribute("data-skeleton", "");
+      }
     }
   }
 
@@ -342,10 +334,7 @@ export function createChain({ onSelect = () => {} } = {}) {
   async function goToCube(hashOrHeight) {
     if (!active) return;
 
-    if (hashOrHeight === "tip") hashOrHeight = null;
-    if (typeof hashOrHeight === "string" && /^\d+$/.test(hashOrHeight)) {
-      hashOrHeight = Number(hashOrHeight);
-    }
+    hashOrHeight = normalizeTarget(hashOrHeight);
 
     const existing = findCube(hashOrHeight);
     if (existing) {
@@ -353,12 +342,7 @@ export function createChain({ onSelect = () => {} } = {}) {
       return;
     }
 
-    for (const cube of blocksElement.children) {
-      if (!cube.hasAttribute("data-projected")) {
-        cube.setAttribute("data-skeleton", "");
-      }
-    }
-
+    markConfirmedSkeletons();
     element.dataset.loading = "";
 
     try {
@@ -367,9 +351,7 @@ export function createChain({ onSelect = () => {} } = {}) {
       const cube = findCube(startHash);
       if (cube) selectCube(cube, { scroll: "instant" });
     } catch (error) {
-      if (!controller.signal.aborted) {
-        console.error("explore chain load:", error);
-      }
+      logChainError("explore chain load:", error);
     } finally {
       delete element.dataset.loading;
     }
@@ -381,7 +363,7 @@ export function createChain({ onSelect = () => {} } = {}) {
         await brk.getMempoolBlocks({ signal: controller.signal }),
       );
     } catch (error) {
-      if (!controller.signal.aborted) console.error("explore mempool:", error);
+      logChainError("explore mempool:", error);
     }
   }
 
@@ -394,7 +376,7 @@ export function createChain({ onSelect = () => {} } = {}) {
     try {
       appendNewerBlocks(await brk.getBlocksV1({ signal: controller.signal }));
     } catch (error) {
-      if (!controller.signal.aborted) console.error("explore chain poll:", error);
+      logChainError("explore chain poll:", error);
     } finally {
       polling = false;
     }
@@ -454,11 +436,11 @@ export function createChain({ onSelect = () => {} } = {}) {
 
       reserveOlderRunway();
     } catch (error) {
-      if (!controller.signal.aborted) {
-        for (const placeholder of batch.placeholders) placeholder.remove();
-        oldestReservedHeight = oldestHeight;
-        console.error("explore older:", error);
-      }
+      if (controller.signal.aborted) return;
+
+      for (const placeholder of batch.placeholders) placeholder.remove();
+      oldestReservedHeight = oldestHeight;
+      logChainError("explore older:", error);
     }
   }
 
@@ -479,7 +461,7 @@ export function createChain({ onSelect = () => {} } = {}) {
         await pollProjected();
       }
     } catch (error) {
-      if (!controller.signal.aborted) console.error("explore newer:", error);
+      logChainError("explore newer:", error);
     } finally {
       loadingNewer = false;
     }
@@ -550,6 +532,13 @@ export function createChain({ onSelect = () => {} } = {}) {
       tipSyncFrame = 0;
       syncTipVisibility();
     });
+  }
+
+  function cancelTipVisibilitySync() {
+    if (!tipSyncFrame) return;
+
+    window.cancelAnimationFrame(tipSyncFrame);
+    tipSyncFrame = 0;
   }
 
   /** @param {boolean} visible */
@@ -635,12 +624,8 @@ export function createChain({ onSelect = () => {} } = {}) {
       pollId = undefined;
     }
 
-    if (tipSyncFrame) {
-      window.cancelAnimationFrame(tipSyncFrame);
-      tipSyncFrame = 0;
-    }
-
-    cancelJump();
+    cancelTipVisibilitySync();
+    jump.cancel();
     controller.abort();
   }
 

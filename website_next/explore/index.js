@@ -8,7 +8,7 @@ export function createExplorePage() {
     onSelect: blockDetails.update,
   });
 
-  main.className = "explore";
+  main.dataset.page = "explore";
   main.append(chain.element, blockDetails.element);
 
   const syncChain = () => chain.setActive(!main.hidden && !document.hidden);

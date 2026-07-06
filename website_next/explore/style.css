@@ -1,4 +1,4 @@
-main.explore {
+main[data-page="explore"] {
   --explore-max-width: 80rem;
   --explore-gap: 2rem;
   --chain-width: calc(4.5rem * sqrt(3));
@@ -14,7 +14,7 @@ main.explore {
 }
 
 @media (max-width: 48rem) {
-  main.explore {
+  main[data-page="explore"] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     gap: 0;

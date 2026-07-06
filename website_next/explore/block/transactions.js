@@ -1,24 +1,17 @@
+import { formatBlockFill, formatBytes, formatNumber } from "./format.js";
+
 /** @typedef {import("../../modules/brk-client/index.js").BlockInfoV1} Block */
-
-const MAX_BLOCK_WEIGHT = 4_000_000;
-
-/** @param {number} bytes */
-function formatBytes(bytes) {
-  return bytes >= 1_000_000
-    ? `${(bytes / 1_000_000).toFixed(2)} MB`
-    : `${bytes.toLocaleString()} B`;
-}
 
 /**
  * @param {string} label
  * @param {(string | Node)[]} values
  */
-function createInlineRow(label, values) {
+function createBlockRow(label, values) {
   const row = document.createElement("div");
   const name = document.createElement("span");
   const data = document.createElement("strong");
 
-  row.dataset.inlineRow = "";
+  row.dataset.blockRow = "";
   name.textContent = label;
   data.append(...values);
   row.append(name, data);
@@ -29,20 +22,15 @@ function createInlineRow(label, values) {
 /**
  * @param {string} label
  * @param {string | Node} value
- * @param {string} [type]
+ * @param {string} type
  */
-function createInlineBox(label, value, type = "inline") {
+function createBlockBox(label, value, type) {
   const box = document.createElement("div");
 
   box.dataset.blockBox = type;
-  box.append(createInlineRow(label, [value]));
+  box.append(createBlockRow(label, [value]));
 
   return box;
-}
-
-/** @param {Block} block */
-function formatBlockFill(block) {
-  return `${((block.weight / MAX_BLOCK_WEIGHT) * 100).toFixed(1)}%`;
 }
 
 /** @param {Block} block */
@@ -56,15 +44,17 @@ export function createTransactionPane(block) {
   transactions.dataset.blockBox = "tx";
   io.dataset.blockIo = "";
   io.append(
-    createInlineBox("Input", extras.totalInputs.toLocaleString(), "input"),
-    createInlineBox("Output", extras.totalOutputs.toLocaleString(), "output"),
+    createBlockBox("Input", formatNumber(extras.totalInputs), "input"),
+    createBlockBox("Output", formatNumber(extras.totalOutputs), "output"),
   );
   transactions.append(
-    createInlineRow("Tx", [block.txCount.toLocaleString()]),
+    createBlockRow("Tx", [formatNumber(block.txCount)]),
     io,
   );
   box.append(
-    createInlineRow("Block", [`${formatBytes(block.size)} · ${formatBlockFill(block)}`]),
+    createBlockRow("Block", [
+      `${formatBytes(block.size)} · ${formatBlockFill(block.weight)}`,
+    ]),
     transactions,
   );
 

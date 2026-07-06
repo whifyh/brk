@@ -2,7 +2,6 @@ import { renderBtcAmount as renderVisibleBtcAmount } from "../../btc/index.js";
 import { redaction } from "../redaction/index.js";
 
 const FIXED_PRIVATE_TEXT = "*****";
-const amounts = /** @type {BtcAmountRecord[]} */ ([]);
 
 /**
  * @typedef {Object} BtcAmountOptions
@@ -11,10 +10,6 @@ const amounts = /** @type {BtcAmountRecord[]} */ ([]);
  * @typedef {Object} BtcAmount
  * @property {number} sats
  * @property {boolean} signed
- *
- * @typedef {Object} BtcAmountRecord
- * @property {HTMLElement} element
- * @property {BtcAmount} amount
  */
 
 /**
@@ -45,20 +40,7 @@ export function createBtcAmount(tag, sats, options = {}) {
     signed: options.signed === true,
   };
 
-  amounts.push({ element, amount });
-  renderBtcAmount(element, amount);
+  redaction.addEffect(element, () => renderBtcAmount(element, amount));
 
   return element;
-}
-
-export function syncBtcAmounts() {
-  for (let index = amounts.length - 1; index >= 0; index -= 1) {
-    const { element, amount } = amounts[index];
-
-    if (!element.isConnected) {
-      amounts.splice(index, 1);
-    } else {
-      renderBtcAmount(element, amount);
-    }
-  }
 }

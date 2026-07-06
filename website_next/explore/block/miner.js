@@ -1,14 +1,7 @@
 import { createPoolLogo } from "../../pools/index.js";
+import { formatPoolBlockNumber, getCoinbaseMessage } from "./format.js";
 
 /** @typedef {import("../../modules/brk-client/index.js").BlockInfoV1} Block */
-
-/** @param {string} raw */
-function getCoinbaseMessage(raw) {
-  return (raw.match(/[\x20-\x7e]{2,}/g) ?? [])
-    .map((value) => value.trim())
-    .filter((value) => /[A-Za-z0-9]/.test(value))
-    .join(" · ");
-}
 
 /** @param {string} raw */
 function createCoinbaseMessage(raw) {
@@ -45,8 +38,7 @@ export function createMinerPane(block) {
   logo.dataset.minerLogo = "";
 
   name.textContent = pool.name;
-  // TODO: remove fallback after the server includes pool.blockNumber everywhere.
-  blockNumber.textContent = `#${(pool.blockNumber || 0).toLocaleString()}`;
+  blockNumber.textContent = formatPoolBlockNumber(pool.blockNumber);
   slug.textContent = pool.slug;
   title.append(name, blockNumber);
   identity.append(title, slug);

@@ -1,4 +1,4 @@
-import { createBtcAmount, SATS_PER_BTC } from "../../btc/index.js";
+import { createBtcAmount, satsToUsd } from "../../btc/index.js";
 import {
   appendLegendListItem,
   createLegendItem,
@@ -27,16 +27,8 @@ function formatShare(sats, total) {
  * @param {number} sats
  * @param {number} price
  */
-function getSatsUsd(sats, price) {
-  return (sats / SATS_PER_BTC) * price;
-}
-
-/**
- * @param {number} sats
- * @param {number} price
- */
 function createSatsUsdAmount(sats, price) {
-  return createUsdAmount("span", getSatsUsd(sats, price));
+  return createUsdAmount("span", satsToUsd(sats, price));
 }
 
 /**

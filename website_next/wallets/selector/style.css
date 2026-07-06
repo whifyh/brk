@@ -1,5 +1,5 @@
-main.wallets {
-  .selector {
+main[data-page="wallets"] {
+  [data-wallet="selector"] {
     min-width: 0;
 
     > nav {
@@ -18,7 +18,7 @@ main.wallets {
         background: var(--gray);
         color: var(--white);
         font-size: var(--font-size-lg);
-        font-weight: 400;
+        font-weight: var(--font-weight-regular);
         line-height: 1;
 
         @media (max-width: 56rem) {
@@ -47,7 +47,7 @@ main.wallets {
           background: var(--white);
         }
 
-        &.delete {
+        &[data-variant="delete"] {
           color: color-mix(in oklch, var(--gray) 76%, transparent);
           background: transparent;
 

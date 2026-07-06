@@ -1,4 +1,4 @@
-main.learn {
+main[data-page="learn"] {
   > nav {
     --nav-offset: calc(var(--offset) + 2rem);
     --line-gap: 0.5rem;

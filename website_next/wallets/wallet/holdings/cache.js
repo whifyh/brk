@@ -1,4 +1,5 @@
 import { mapConcurrent } from "../../concurrent.js";
+import { createBucketKey } from "../bucket-key.js";
 
 const UTXO_CONCURRENCY = 4;
 
@@ -38,13 +39,6 @@ function isNotFound(error) {
     error instanceof Error &&
     /** @type {{ status?: unknown }} */ (error).status === 404
   );
-}
-
-/**
- * @param {readonly string[]} addresses
- */
-function createBucketKey(addresses) {
-  return [...addresses].sort().join("\n");
 }
 
 /**

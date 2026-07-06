@@ -145,9 +145,13 @@ export function createXyChart({
     highlight.clearPreview();
   }
 
-  function disconnect() {
+  function cancelPointerFrame() {
     if (pointerFrame) cancelAnimationFrame(pointerFrame);
     pointerFrame = 0;
+  }
+
+  function disconnect() {
+    cancelPointerFrame();
     resizeObserver.disconnect();
   }
 
@@ -157,8 +161,7 @@ export function createXyChart({
   svg.addEventListener("pointerenter", measure);
   svg.addEventListener("pointermove", updateFromPointer);
   svg.addEventListener("pointerleave", () => {
-    if (pointerFrame) cancelAnimationFrame(pointerFrame);
-    pointerFrame = 0;
+    cancelPointerFrame();
     hideMarker();
   });
   figure.addEventListener("chart:destroy", disconnect, { once: true });

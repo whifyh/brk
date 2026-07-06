@@ -1,7 +1,12 @@
-/** @typedef {import("../../modules/brk-client/index.js").BlockInfoV1} Block */
+import {
+  DIFFICULTY_EPOCH_BLOCKS,
+  HALVING_EPOCH_BLOCKS,
+  formatEpoch,
+  formatNumber,
+  getEpochProgress,
+} from "./format.js";
 
-const DIFFICULTY_EPOCH_BLOCKS = 2_016;
-const HALVING_EPOCH_BLOCKS = 210_000;
+/** @typedef {import("../../modules/brk-client/index.js").BlockInfoV1} Block */
 
 /**
  * @param {string} label
@@ -27,7 +32,7 @@ function createMetricStat(label, value) {
  * @param {string} color
  */
 function createEpochProgress(label, height, length, color) {
-  const progress = (height % length) + 1;
+  const progress = getEpochProgress(height, length);
   const row = document.createElement("div");
   const head = document.createElement("div");
   const name = document.createElement("span");
@@ -42,11 +47,11 @@ function createEpochProgress(label, height, length, color) {
   done.dataset.epochSegment = "done";
   remaining.dataset.epochSegment = "remaining";
   row.style.setProperty("--epoch-color", color);
-  done.style.setProperty("--share", `${(progress / length) * 100}%`);
-  remaining.style.setProperty("--share", `${((length - progress) / length) * 100}%`);
+  done.style.setProperty("--share", `${progress.ratio * 100}%`);
+  remaining.style.setProperty("--share", `${(progress.remaining / length) * 100}%`);
 
   name.textContent = label;
-  value.textContent = `${((progress / length) * 100).toFixed(1)}%`;
+  value.textContent = formatEpoch(height, length);
   head.append(name, value);
   bar.append(done, remaining);
   row.append(head, bar);
@@ -60,7 +65,7 @@ export function createDifficultyPane(block) {
 
   pane.dataset.metricList = "";
   pane.append(
-    createMetricStat("Difficulty", block.difficulty.toLocaleString()),
+    createMetricStat("Difficulty", formatNumber(block.difficulty)),
     createEpochProgress(
       "Difficulty epoch",
       block.height,

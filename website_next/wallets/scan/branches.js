@@ -6,6 +6,7 @@ import {
   getOutputDescriptorBranchIds,
   isOutputDescriptor,
 } from "../derive/index.js";
+import { isUsedAddress } from "./activity.js";
 
 const keyBranches = /** @type {const} */ ([
   { id: "receive", label: "Receive", path: [0] },
@@ -57,13 +58,6 @@ const descriptorBranches = /** @type {const} */ ([
  * @property {number} gapLimit
  * @property {boolean} maxed
  */
-
-/**
- * @param {WalletAddress} address
- */
-function isUsedAddress(address) {
-  return address.received > 0 || address.sent > 0 || address.txCount > 0;
-}
 
 /**
  * @param {ScannedAddress} a

@@ -1,4 +1,4 @@
-main.learn {
+main[data-page="learn"] {
   --offset: 4rem;
   --content-width: 52rem;
   --heading-padding-bottom: 0.5rem;

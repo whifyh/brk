@@ -6,6 +6,7 @@ import {
   createHeightElement,
   dim,
   formatHHMM,
+  formatNumber,
   formatShortDate,
 } from "./format.js";
 
@@ -15,7 +16,7 @@ import {
 export function createPlaceholderCube() {
   const cube = document.createElement("div");
 
-  cube.dataset.cube = "";
+  cube.dataset.cube = "block";
   cube.dataset.placeholder = "";
 
   return cube;
@@ -44,7 +45,7 @@ function createConfirmedCube(block, onSelect) {
   cube.element.dataset.hash = block.id;
   cube.element.dataset.height = String(block.height);
   cube.element.dataset.timestamp = String(block.timestamp);
-  cube.element.title = `Block ${block.height.toLocaleString()}`;
+  cube.element.title = `Block ${formatNumber(block.height)}`;
   onPlainClick(cube.element, () => onSelect(cube.element));
 
   const date = document.createElement("p");
@@ -145,7 +146,7 @@ export function updateProjectedCube(cube, block) {
     String(Math.min(1, block.blockVSize / 1_000_000)),
   );
 
-  cube.parts.txs.nodeValue = block.nTx.toLocaleString();
+  cube.parts.txs.nodeValue = formatNumber(block.nTx);
   cube.parts.txsUnit.nodeValue = block.nTx === 1 ? "tx" : "txs";
   cube.parts.median.nodeValue = formatFeeRate(block.medianFee);
   cube.parts.rangeLo.nodeValue = formatFeeRate(block.feeRange[0]);

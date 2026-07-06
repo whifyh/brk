@@ -1,5 +1,6 @@
 import { fetchWalletAddresses } from "../lookup/index.js";
 import { generateAddressesFromWalletSource } from "../derive/index.js";
+import { isUsedAddress } from "./activity.js";
 
 export const GAP_LIMIT = 10;
 
@@ -33,13 +34,6 @@ const MAX_SCANNED_ADDRESSES = 1_000;
  * @property {number} gapLimit
  * @property {boolean} maxed
  */
-
-/**
- * @param {WalletAddress} address
- */
-function isUsedAddress(address) {
-  return address.received > 0 || address.sent > 0 || address.txCount > 0;
-}
 
 /**
  * @param {AddressClient} client

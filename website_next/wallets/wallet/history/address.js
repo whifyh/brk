@@ -1,4 +1,5 @@
 import { mapConcurrent } from "../../concurrent.js";
+import { createBucketKey } from "../bucket-key.js";
 
 const HISTORY_CONCURRENCY = 4;
 const MAX_SELECTED_ADDRESS_TXS = 100;
@@ -20,13 +21,6 @@ const historyByBucketKey =
  * @typedef {Object} AddressHistory
  * @property {ApiTransaction[]} transactions
  */
-
-/**
- * @param {readonly string[]} addresses
- */
-function createBucketKey(addresses) {
-  return [...addresses].sort().join("\n");
-}
 
 /**
  * @param {AddressHistoryClient} client

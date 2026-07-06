@@ -37,6 +37,11 @@ export function createHeightElement(height) {
   return container;
 }
 
+/** @param {number} value */
+export function formatNumber(value) {
+  return value.toLocaleString();
+}
+
 /** @param {number} unixSeconds */
 export function formatShortDate(unixSeconds) {
   const date = new Date(unixSeconds * 1_000);

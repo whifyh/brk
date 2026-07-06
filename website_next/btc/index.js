@@ -3,6 +3,14 @@ export const SATS_PER_BTC = 100_000_000;
 const FRACTION_DIGITS = 8;
 
 /**
+ * @param {number} sats
+ * @param {number} price
+ */
+export function satsToUsd(sats, price) {
+  return (sats / SATS_PER_BTC) * price;
+}
+
+/**
  * @typedef {Object} BtcAmountOptions
  * @property {boolean} [signed]
  *

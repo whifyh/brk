@@ -1,3 +1,5 @@
+import { CUBE_FACE_SPECS, createCubeFace } from "../../../cube/faces.js";
+
 /**
  * @param {number} [fill]
  */
@@ -23,41 +25,20 @@ export function createCubeDiv(fill = 1) {
  * @param {number} fill
  */
 function populateCube(element, fill) {
-  const topFace = createFace("face-text", "top");
-  const rightFace = createFace("face-text", "right");
-  const leftFace = createFace("face-text", "left");
+  const topFace = createCubeFace("div", "text", "top");
+  const rightFace = createCubeFace("div", "text", "right");
+  const leftFace = createCubeFace("div", "text", "left");
 
-  element.dataset.cube = "";
+  element.dataset.cube = "block";
   element.style.setProperty("--fill", String(fill));
   element.append(
-    createFace("glass", "bottom"),
-    createFace("glass", "rear-right"),
-    createFace("glass", "rear-left"),
-    createFace("liquid", "bottom"),
-    createFace("liquid", "rear-right"),
-    createFace("liquid", "rear-left"),
-    createFace("liquid", "right"),
-    createFace("liquid", "left"),
-    createFace("liquid", "top"),
-    createFace("glass", "right"),
-    createFace("glass", "left"),
-    createFace("glass", "top"),
+    ...CUBE_FACE_SPECS.map(([role, side]) =>
+      createCubeFace("div", role, side),
+    ),
     rightFace,
     leftFace,
     topFace,
   );
 
   return { topFace, rightFace, leftFace };
-}
-
-/**
- * @param {string} role
- * @param {string} position
- */
-function createFace(role, position) {
-  const element = document.createElement("div");
-
-  element.className = `face ${role} ${position}`;
-
-  return element;
 }

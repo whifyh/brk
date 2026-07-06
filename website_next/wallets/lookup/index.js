@@ -108,20 +108,29 @@ function isNotFound(error) {
 
 /**
  * @param {AddressClient} client
+ * @param {string} address
+ * @param {Map<string, Promise<AddressStats>>} cache
+ */
+function getBucketMetadata(client, address, cache) {
+  let metadata = cache.get(address);
+
+  if (!metadata) {
+    metadata = client.getAddress(address, { cache: false });
+    cache.set(address, metadata);
+  }
+
+  return metadata;
+}
+
+/**
+ * @param {AddressClient} client
  * @param {readonly string[]} addresses
  * @param {Map<string, Promise<AddressStats>>} cache
  */
 async function fetchBucketMetadata(client, addresses, cache) {
-  for (const address of addresses) {
-    if (!cache.has(address)) {
-      cache.set(
-        address,
-        client.getAddress(address, { cache: false }),
-      );
-    }
-  }
-
-  await Promise.all(addresses.map((address) => cache.get(address)));
+  await Promise.all(
+    addresses.map((address) => getBucketMetadata(client, address, cache)),
+  );
 }
 
 /**
@@ -160,18 +169,18 @@ async function fetchWalletAddress(client, generated, metadataCache) {
 
   await fetchBucketMetadata(client, matches.addresses, metadataCache);
 
-  const stats = await metadataCache.get(generated.address);
-
-  if (!stats) {
-    return createEmptyWalletAddress(generated);
-  }
+  const stats = await getBucketMetadata(
+    client,
+    generated.address,
+    metadataCache,
+  );
 
   const historyAddresses = [];
 
   for (const address of matches.addresses) {
-    const bucketStats = await metadataCache.get(address);
+    const bucketStats = await getBucketMetadata(client, address, metadataCache);
 
-    if (bucketStats && getAddressTxCount(bucketStats) > 0) {
+    if (getAddressTxCount(bucketStats) > 0) {
       historyAddresses.push(address);
     }
   }

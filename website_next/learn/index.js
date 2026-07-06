@@ -50,7 +50,7 @@ function createSection(section, path = []) {
 
 export function createLearnPage() {
   const main = document.createElement("main");
-  main.className = "learn";
+  main.dataset.page = "learn";
   const article = document.createElement("article");
 
   for (const section of sections) {

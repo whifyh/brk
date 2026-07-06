@@ -61,12 +61,12 @@
       margin-bottom: var(--block-gap);
     }
 
-    .face-text [data-cube-height] {
+    [data-role="text"] [data-cube-height] {
       font-size: var(--font-size-sm);
-      font-weight: normal;
+      font-weight: var(--font-weight-regular);
     }
 
-    .face-text [data-cube-fees] {
+    [data-role="text"] [data-cube-fees] {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -74,7 +74,7 @@
       height: 100%;
     }
 
-    .face-text [data-cube-pool] {
+    [data-role="text"] [data-cube-pool] {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -108,7 +108,7 @@
     border-radius: 999rem;
     padding: 0;
     font-size: var(--font-size-base);
-    font-weight: 500;
+    font-weight: var(--font-weight-strong);
     line-height: 1;
     letter-spacing: 0;
     opacity: 0;
