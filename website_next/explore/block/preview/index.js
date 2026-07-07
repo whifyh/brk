@@ -4,7 +4,7 @@ import { formatWeight, MAX_BLOCK_WEIGHT } from "../format.js";
 import { getFeeRateColor } from "../fee-rates.js";
 import { loadBlockPreview } from "./data.js";
 import { createPreviewFeeRange, orderTransactions } from "./fees.js";
-import { createVersionFilters, getVersionKey } from "./filters.js";
+import { createPreviewFilters, getFilterKeys, getVersionKey } from "./filters.js";
 
 /**
  * @param {BlockPreviewTransaction} transaction
@@ -14,10 +14,14 @@ function createPreviewItem(transaction, ranges) {
   return {
     color: getFeeRateColor(transaction.feeRate, ranges),
     group: getVersionKey(transaction.version),
+    groups: getFilterKeys(transaction),
     weight: transaction.weight,
     title: [
       transaction.txid,
       `v${transaction.version}`,
+      transaction.rbf ? "RBF" : "no RBF",
+      `${transaction.inputCount} in`,
+      `${transaction.outputCount} out`,
       `${formatFeeRate(transaction.feeRate)} sat/vB`,
       formatWeight(transaction.weight),
     ].join(" · "),
@@ -59,7 +63,7 @@ function renderPreview(content, transactions) {
     columns: 84,
   });
 
-  content.replaceChildren(createFigure(heatmap, createVersionFilters(ordered, heatmap)));
+  content.replaceChildren(createFigure(heatmap, createPreviewFilters(ordered, heatmap)));
 }
 
 /**
@@ -71,7 +75,7 @@ function renderStatus(content, status) {
 
   p.dataset.blockPreviewStatus = status;
   p.textContent = status;
-  content.replaceChildren(createFigure(p, createVersionFilters([], null, {
+  content.replaceChildren(createFigure(p, createPreviewFilters([], null, {
     pending: true,
   })));
 }

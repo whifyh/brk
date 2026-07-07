@@ -9,6 +9,7 @@ function createCell(item) {
   const cell = document.createElement("span");
 
   cell.dataset.heatmapCell = item.group;
+  if (item.groups !== undefined) cell.dataset.heatmapGroups = item.groups.join(" ");
   cell.style.setProperty("--color", item.color);
   cell.title = item.title;
 
@@ -143,6 +144,7 @@ export function createHeatmap(items, options = {}) {
  * @typedef {Object} HeatmapItem
  * @property {string} color
  * @property {string} group
+ * @property {string[]} [groups]
  * @property {string} title
  * @property {number} [span]
  * @property {number} [weight]

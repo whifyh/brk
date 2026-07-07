@@ -5,50 +5,117 @@ import {
 } from "../../../legend/index.js";
 import { formatNumber } from "../format.js";
 
-const VERSION_FILTERS = /** @type {const} */ ([1, 2, 3]);
+/** @param {BlockPreviewTransaction} tx */
+function isVersion1(tx) {
+  return tx.version === 1;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function isVersion2(tx) {
+  return tx.version === 2;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function isVersion3(tx) {
+  return tx.version === 3;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function isRbf(tx) {
+  return tx.rbf;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function isNotRbf(tx) {
+  return !tx.rbf;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function hasOneInput(tx) {
+  return tx.inputCount === 1;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function hasManyInputs(tx) {
+  return tx.inputCount !== 1;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function hasOneOutput(tx) {
+  return tx.outputCount === 1;
+}
+
+/** @param {BlockPreviewTransaction} tx */
+function hasManyOutputs(tx) {
+  return tx.outputCount !== 1;
+}
+
+const FILTERS = /** @type {const} */ ([
+  { group: "version", label: "tx v1", key: "version:1", match: isVersion1 },
+  { group: "version", label: "tx v2", key: "version:2", match: isVersion2 },
+  { group: "version", label: "tx v3", key: "version:3", match: isVersion3 },
+  { group: "rbf", label: "rbf", key: "rbf:yes", match: isRbf },
+  { group: "rbf", label: "no rbf", key: "rbf:no", match: isNotRbf },
+  { group: "input", label: "1 in", key: "input:one", match: hasOneInput },
+  { group: "input", label: "multi in", key: "input:multi", match: hasManyInputs },
+  { group: "output", label: "1 out", key: "output:one", match: hasOneOutput },
+  { group: "output", label: "multi out", key: "output:multi", match: hasManyOutputs },
+]);
+
+const FILTER_GROUPS = /** @type {const} */ ([
+  "version",
+  "rbf",
+  "input",
+  "output",
+]);
 
 /** @param {number} version */
 export function getVersionKey(version) {
-  return String(version);
+  return `version:${version}`;
+}
+
+/**
+ * @param {BlockPreviewTransaction} transaction
+ */
+export function getFilterKeys(transaction) {
+  return FILTERS
+    .filter(({ match }) => match(transaction))
+    .map(({ key }) => key);
 }
 
 /**
  * @param {BlockPreviewTransaction[]} transactions
- * @returns {Map<number, number>}
  */
-function countVersions(transactions) {
-  const counts = new Map();
+function countFilters(transactions) {
+  return new Map(FILTERS.map(({ key, match }) => {
+    return [key, transactions.filter(match).length];
+  }));
+}
 
-  for (const transaction of transactions) {
-    counts.set(transaction.version, (counts.get(transaction.version) ?? 0) + 1);
-  }
+function createActiveFilters() {
+  return new Map(FILTER_GROUPS.map((group) => {
+    const keys = FILTERS
+      .filter((filter) => filter.group === group)
+      .map(({ key }) => String(key));
 
-  return counts;
+    return [group, new Set(keys)];
+  }));
 }
 
 /**
- * @param {HTMLElement} heatmap
- * @returns {Map<string, HTMLElement[]>}
+ * @param {string[]} keys
+ * @param {Map<string, Set<string>>} activeFilters
  */
-function groupCells(heatmap) {
-  const groups = new Map();
-  const cells = /** @type {HTMLElement[]} */ ([
-    ...heatmap.querySelectorAll("[data-heatmap-cell]"),
-  ]);
+function matchesActiveFilters(keys, activeFilters) {
+  for (const group of FILTER_GROUPS) {
+    const activeKeys = activeFilters.get(group);
 
-  for (const cell of cells) {
-    const key = /** @type {string} */ (cell.dataset.heatmapCell);
-    let group = groups.get(key);
+    if ([...activeKeys ?? []].some((key) => keys.includes(key))) continue;
 
-    if (group === undefined) {
-      group = [];
-      groups.set(key, group);
-    }
-
-    group.push(cell);
+    return false;
   }
 
-  return groups;
+  return true;
 }
 
 /**
@@ -75,19 +142,31 @@ function setPending(button) {
  * @param {Object} [options]
  * @param {boolean} [options.pending]
  */
-export function createVersionFilters(transactions, heatmap, options = {}) {
+export function createPreviewFilters(transactions, heatmap, options = {}) {
   const list = createLegendList({ scroll: true });
-  const counts = countVersions(transactions);
-  const cells = heatmap === null ? new Map() : groupCells(heatmap);
+  const counts = countFilters(transactions);
   const pending = options.pending === true;
+  const activeFilters = createActiveFilters();
 
-  for (const version of VERSION_FILTERS) {
-    const count = counts.get(version) ?? 0;
-    const key = getVersionKey(version);
+  function updateCells() {
+    const cells = /** @type {HTMLElement[]} */ ([
+      ...heatmap?.querySelectorAll("[data-heatmap-cell]") ?? [],
+    ]);
+
+    for (const cell of cells) {
+      const keys = cell.dataset.heatmapGroups?.split(" ") ?? [];
+      const active = matchesActiveFilters(keys, activeFilters);
+
+      cell.toggleAttribute("data-muted", !active);
+    }
+  }
+
+  for (const filter of FILTERS) {
+    const count = counts.get(filter.key) ?? 0;
     const { button, value } = createLegendItem({
-      label: `tx v${version}`,
+      label: filter.label,
       color: "var(--white)",
-      ariaLabel: `Transaction version ${version}`,
+      ariaLabel: filter.label,
     });
 
     value.textContent = pending ? "..." : formatNumber(count);
@@ -96,11 +175,14 @@ export function createVersionFilters(transactions, heatmap, options = {}) {
     } else {
       button.addEventListener("click", () => {
         const active = button.getAttribute("aria-pressed") !== "true";
+        const activeKeys = /** @type {Set<string>} */ (
+          activeFilters.get(filter.group)
+        );
 
         setActive(button, active);
-        for (const cell of cells.get(key) ?? []) {
-          cell.toggleAttribute("data-muted", !active);
-        }
+        if (active) activeKeys.add(filter.key);
+        else activeKeys.delete(filter.key);
+        updateCells();
       });
       setActive(button, true);
     }

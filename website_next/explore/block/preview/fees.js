@@ -21,4 +21,7 @@ export function orderTransactions(transactions) {
  * @property {number} version
  * @property {number} weight
  * @property {number} feeRate
+ * @property {boolean} rbf
+ * @property {number} inputCount
+ * @property {number} outputCount
  */
