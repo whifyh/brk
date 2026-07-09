@@ -166,7 +166,9 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
 
     for (const rect of rects) {
       const mask = getTransactionMask(rect.transaction, filterState);
-      const alpha = mask & activeMask ? MUTED_ALPHA : 1;
+      const alpha = previewMask === null
+        ? (mask & activeMask ? MUTED_ALPHA : 1)
+        : (mask & activeMask ? 1 : MUTED_ALPHA);
 
       drawRect(context, alpha, rect.color, rect);
       if (rect.transaction === inspected) inspectedRect = rect;
@@ -286,7 +288,7 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
       observer.disconnect();
     },
     /** @param {number | null} mask */
-    previewDisabledMask(mask) {
+    setPreviewMask(mask) {
       previewMask = mask;
       scheduleDraw();
     },

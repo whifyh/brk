@@ -110,7 +110,7 @@ export function createPreviewFilters(loadFilters, heatmap) {
   function resetPreview() {
     previewButton?.removeAttribute("data-preview");
     previewButton = null;
-    heatmap.previewDisabledMask(null);
+    heatmap.setPreviewMask(null);
   }
 
   /**
@@ -121,7 +121,7 @@ export function createPreviewFilters(loadFilters, heatmap) {
     resetPreview();
     previewButton = button;
     button.dataset.preview = "";
-    heatmap.previewDisabledMask(nextMask);
+    heatmap.setPreviewMask(nextMask);
   }
 
   /**
@@ -163,23 +163,13 @@ export function createPreviewFilters(loadFilters, heatmap) {
 
           if (canPreview) {
             button.addEventListener("pointerenter", () => {
-              const active = (disabledMask & filter.bit) === 0;
-              const nextMask = active
-                ? disabledMask | filter.bit
-                : disabledMask & ~filter.bit;
-
-              preview(button, nextMask);
+              preview(button, filter.bit);
             });
             button.addEventListener("pointerleave", resetPreview);
           }
 
           button.addEventListener("focus", () => {
-            const active = (disabledMask & filter.bit) === 0;
-            const nextMask = active
-              ? disabledMask | filter.bit
-              : disabledMask & ~filter.bit;
-
-            preview(button, nextMask);
+            preview(button, filter.bit);
           });
           button.addEventListener("blur", resetPreview);
           setActive(button, (disabledMask & filter.bit) === 0);
