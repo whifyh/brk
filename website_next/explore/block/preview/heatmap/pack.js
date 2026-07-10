@@ -1,41 +1,39 @@
 /**
  * @param {readonly PackCell[]} cells
  * @param {number} columns
- * @param {number} [rows]
+ * @param {number} rows
  * @returns {PackLayout[] | null}
  */
 export function packCells(cells, columns, rows) {
-  const occupied = /** @type {boolean[][]} */ ([]);
+  const occupied = new Uint8Array(columns * rows);
   const layouts = [];
-  let usedRows = 0;
 
   for (const cell of cells) {
     const span = Math.min(cell.span, columns);
-    const position = findPosition(occupied, columns, span, rows);
+    const position = findPosition(occupied, columns, rows, span);
 
     if (position === null) return null;
 
-    fillCells(occupied, position.x, position.y, span);
-    usedRows = Math.max(usedRows, position.y + span);
-    layouts.push({ ...position, span, rows: rows ?? usedRows });
+    fillCells(occupied, columns, position.x, position.y, span);
+    layouts.push({ x: position.x, y: position.y, span });
   }
 
   return layouts;
 }
 
 /**
- * @param {boolean[][]} occupied
+ * @param {Uint8Array} occupied
  * @param {number} columns
+ * @param {number} rows
  * @param {number} span
- * @param {number} [rows]
  * @returns {{ x: number, y: number } | null}
  */
-function findPosition(occupied, columns, span, rows) {
-  const lastRow = rows === undefined ? Infinity : rows - span;
+function findPosition(occupied, columns, rows, span) {
+  const lastRow = rows - span;
 
   for (let y = 0; y <= lastRow; y += 1) {
     for (let x = 0; x <= columns - span; x += 1) {
-      if (canPlace(occupied, x, y, span)) return { x, y };
+      if (canPlace(occupied, columns, x, y, span)) return { x, y };
     }
   }
 
@@ -43,15 +41,18 @@ function findPosition(occupied, columns, span, rows) {
 }
 
 /**
- * @param {boolean[][]} occupied
+ * @param {Uint8Array} occupied
+ * @param {number} columns
  * @param {number} x
  * @param {number} y
  * @param {number} span
  */
-function canPlace(occupied, x, y, span) {
+function canPlace(occupied, columns, x, y, span) {
   for (let row = y; row < y + span; row += 1) {
+    const offset = row * columns;
+
     for (let column = x; column < x + span; column += 1) {
-      if (occupied[row]?.[column]) return false;
+      if (occupied[offset + column]) return false;
     }
   }
 
@@ -59,17 +60,18 @@ function canPlace(occupied, x, y, span) {
 }
 
 /**
- * @param {boolean[][]} occupied
+ * @param {Uint8Array} occupied
+ * @param {number} columns
  * @param {number} x
  * @param {number} y
  * @param {number} span
  */
-function fillCells(occupied, x, y, span) {
+function fillCells(occupied, columns, x, y, span) {
   for (let row = y; row < y + span; row += 1) {
-    occupied[row] ??= [];
+    const offset = row * columns;
 
     for (let column = x; column < x + span; column += 1) {
-      occupied[row][column] = true;
+      occupied[offset + column] = 1;
     }
   }
 }
@@ -84,5 +86,4 @@ function fillCells(occupied, x, y, span) {
  * @property {number} x
  * @property {number} y
  * @property {number} span
- * @property {number} rows
  */

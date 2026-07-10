@@ -2,44 +2,83 @@ import { MAX_BLOCK_WEIGHT } from "../../format.js";
 import { createPreviewFeeRange, orderTransactions } from "./fees.js";
 import { createSquareLayout } from "./capacity.js";
 import { getCanvasFeeRateColor } from "./color.js";
-import { createPreviewRects, hitTest } from "./geometry.js";
+import { createPreviewGeometry, hitTest } from "./geometry.js";
 import { drawPreview } from "./draw.js";
 
 const COLUMNS = 84;
 const VISIBLE_CELLS = COLUMNS * COLUMNS;
 
 /**
- * @param {BlockPreviewTransaction[]} transactions
+ * @param {BlockPreviewData} data
+ * @param {Uint32Array} order
+ * @param {number[]} ranges
+ */
+function createCapacityCells(data, order, ranges) {
+  const count = Math.min(order.length, VISIBLE_CELLS);
+  const colors = /** @type {Map<number, string>} */ (new Map());
+  const cells = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const offset = order[index];
+    const feeRate = data.feeRates[offset];
+    const weight = data.weights[offset];
+    let color = colors.get(feeRate);
+
+    if (color === undefined) {
+      color = getCanvasFeeRateColor(feeRate, ranges);
+      colors.set(feeRate, color);
+    }
+
+    cells.push({
+      color,
+      transaction: {
+        feeRate,
+        txIndex: data.range.start + offset,
+        weight,
+      },
+      weight,
+    });
+  }
+
+  return cells;
+}
+
+/**
+ * @param {BlockPreviewData} data
  * @param {Object} [options]
  * @param {(transaction: BlockPreviewTransaction | null, point: BlockPreviewPointer | null, eager: boolean) => void} [options.onInspect]
  */
-export function createBlockPreviewHeatmap(transactions, options = {}) {
+export function createBlockPreviewHeatmap(data, options = {}) {
   const canvas = document.createElement("canvas");
   const context = /** @type {CanvasRenderingContext2D} */ (
     canvas.getContext("2d")
   );
-  const ordered = orderTransactions(transactions);
-  const ranges = createPreviewFeeRange(ordered);
-  const visible = ordered.slice(0, VISIBLE_CELLS);
-  const cells = visible.map((transaction) => ({
-    color: getCanvasFeeRateColor(transaction.feeRate, ranges),
-    transaction,
-    weight: transaction.weight,
-  }));
+  const order = orderTransactions(data.weights, data.feeRates);
+  const ranges = createPreviewFeeRange(data.feeRates, order);
+  const cells = createCapacityCells(data, order, ranges);
   const square = createSquareLayout(cells, MAX_BLOCK_WEIGHT, COLUMNS);
   let disabledMask = 0;
   let filterState = /** @type {BlockPreviewFilterState | null} */ (null);
   let frame = 0;
   let inspected = /** @type {BlockPreviewTransaction | null} */ (null);
+  let inspectFrame = 0;
+  let inspectPoint = /** @type {BlockPreviewPointer | null} */ (null);
+  let bounds = /** @type {DOMRectReadOnly | null} */ (null);
   let previewMask = /** @type {number | null} */ (null);
-  let rects = /** @type {PreviewRect[]} */ ([]);
+  let geometry = /** @type {PreviewGeometry | null} */ (null);
   let rectWidth = 0;
   let capturedPointer = /** @type {number | null} */ (null);
 
   canvas.dataset.blockPreviewHeatmap = "";
 
+  function measure() {
+    bounds = canvas.getBoundingClientRect();
+
+    return bounds;
+  }
+
   function draw() {
-    const width = canvas.getBoundingClientRect().width;
+    const width = measure().width;
 
     if (width <= 0) return;
 
@@ -53,7 +92,7 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
 
     if (rectWidth !== width) {
       rectWidth = width;
-      rects = createPreviewRects(square, canvas, width);
+      geometry = createPreviewGeometry(square, canvas, width);
     }
 
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -64,13 +103,19 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
       filterState,
       inspected,
       previewMask,
-      rects,
+      rects: geometry?.rects ?? [],
     });
   }
 
   function scheduleDraw() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(draw);
+  }
+
+  function cancelInspectFrame() {
+    cancelAnimationFrame(inspectFrame);
+    inspectFrame = 0;
+    inspectPoint = null;
   }
 
   /** @param {BlockPreviewTransaction | null} transaction */
@@ -82,46 +127,64 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
   }
 
   /**
-   * @param {PointerEvent} event
+   * @param {BlockPreviewPointer} point
    * @param {boolean} eager
    */
-  function inspectAt(event, eager) {
-    const bounds = canvas.getBoundingClientRect();
+  function inspectAt(point, eager) {
+    const nextBounds = bounds ?? measure();
+    if (geometry === null) draw();
+    if (geometry === null) return;
+
     const transaction = hitTest(
-      rects,
-      event.clientX - bounds.left,
-      event.clientY - bounds.top,
+      geometry,
+      point.clientX - nextBounds.left,
+      point.clientY - nextBounds.top,
     );
 
     if (transaction === null && inspected !== null) {
-      options.onInspect?.(
-        inspected,
-        { clientX: event.clientX, clientY: event.clientY },
-        eager,
-      );
+      options.onInspect?.(inspected, point, eager);
       return;
     }
 
     setInspected(transaction);
-    options.onInspect?.(
-      transaction,
-      { clientX: event.clientX, clientY: event.clientY },
-      eager,
-    );
+    options.onInspect?.(transaction, point, eager);
+  }
+
+  /** @param {PointerEvent} event */
+  function pointFromEvent(event) {
+    return { clientX: event.clientX, clientY: event.clientY };
+  }
+
+  function inspectLatest() {
+    const point = inspectPoint;
+
+    inspectFrame = 0;
+    inspectPoint = null;
+    if (point !== null) inspectAt(point, false);
+  }
+
+  /** @param {PointerEvent} event */
+  function scheduleInspect(event) {
+    inspectPoint = pointFromEvent(event);
+    if (inspectFrame) return;
+
+    inspectFrame = requestAnimationFrame(inspectLatest);
   }
 
   /** @param {PointerEvent} event */
   function startInspect(event) {
     capturedPointer = event.pointerId;
     canvas.setPointerCapture(event.pointerId);
-    inspectAt(event, true);
+    cancelInspectFrame();
+    measure();
+    inspectAt(pointFromEvent(event), true);
     if (event.pointerType !== "mouse") event.preventDefault();
   }
 
   /** @param {PointerEvent} event */
   function moveInspect(event) {
     if (capturedPointer !== null || event.pointerType === "mouse") {
-      inspectAt(event, false);
+      scheduleInspect(event);
       if (capturedPointer !== null && event.pointerType !== "mouse") {
         event.preventDefault();
       }
@@ -138,6 +201,7 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
   }
 
   function clearInspect() {
+    cancelInspectFrame();
     setInspected(null);
     options.onInspect?.(null, null, false);
   }
@@ -151,6 +215,7 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
 
   const observer = new ResizeObserver(scheduleDraw);
 
+  canvas.addEventListener("pointerenter", measure);
   canvas.addEventListener("pointermove", moveInspect);
   canvas.addEventListener("pointerdown", startInspect);
   canvas.addEventListener("pointerup", stopInspect);
@@ -170,9 +235,9 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
 
   return /** @type {const} */ ({
     element: canvas,
-    ordered,
     destroy() {
       cancelAnimationFrame(frame);
+      cancelInspectFrame();
       document.removeEventListener("pointerdown", clearOnOutsidePointer);
       window.removeEventListener("blur", clearInspect);
       observer.disconnect();
@@ -199,6 +264,7 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
   });
 }
 
+/** @typedef {import("../data.js").BlockPreviewData} BlockPreviewData */
 /** @typedef {import("../data.js").BlockPreviewTransaction} BlockPreviewTransaction */
 /** @typedef {import("../data.js").BlockPreviewFilterState} BlockPreviewFilterState */
 
@@ -208,4 +274,4 @@ export function createBlockPreviewHeatmap(transactions, options = {}) {
  * @property {number} clientY
  */
 
-/** @typedef {import("./geometry.js").PreviewRect} PreviewRect */
+/** @typedef {import("./geometry.js").PreviewGeometry} PreviewGeometry */

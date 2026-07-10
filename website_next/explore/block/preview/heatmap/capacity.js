@@ -16,12 +16,16 @@ function weightToSpan(weight, capacity, columns) {
  * @param {readonly Cell[]} cells
  * @param {number} capacity
  * @param {number} columns
+ * @returns {ResolvedCapacityCell<Cell>[]}
  */
 function resolveCapacityCells(cells, capacity, columns) {
-  return cells.map((cell) => ({
-    ...cell,
-    span: weightToSpan(cell.weight, capacity, columns),
-  }));
+  const resolved = /** @type {ResolvedCapacityCell<Cell>[]} */ (cells);
+
+  for (const cell of resolved) {
+    cell.span = weightToSpan(cell.weight, capacity, columns);
+  }
+
+  return resolved;
 }
 
 /**
@@ -31,10 +35,7 @@ function resolveCapacityCells(cells, capacity, columns) {
  * @param {number} columns
  */
 function fitCapacityCells(cells, capacity, columns) {
-  let resolvedCells = resolveCapacityCells(cells, capacity, columns).slice(
-    0,
-    columns * columns,
-  );
+  const resolvedCells = resolveCapacityCells(cells, capacity, columns);
   let layouts = packCells(resolvedCells, columns, columns);
 
   while (layouts === null) {
@@ -70,4 +71,9 @@ export function createSquareLayout(cells, capacity, columns) {
 /**
  * @typedef {Object} CapacityCell
  * @property {number} weight
+ */
+
+/**
+ * @template {CapacityCell} Cell
+ * @typedef {Cell & { span: number }} ResolvedCapacityCell
  */

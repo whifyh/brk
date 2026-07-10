@@ -50,18 +50,22 @@ const FILTER_BITS = /** @type {Map<string, number>} */ (
   new Map(FILTERS.map(({ bit, key }) => [key, bit]))
 );
 
-const TYPE_KEYS = /** @type {const} */ ({
-  empty: "type:empty",
-  multisig: "type:multisig",
-  op_return: "type:op_return",
-  p2a: "type:p2a",
-  p2pk: "type:p2pk",
-  p2pkh: "type:p2pkh",
-  p2sh: "type:p2sh",
-  unknown: "type:unknown",
-  v0_p2wpkh: "type:p2wpkh",
-  v0_p2wsh: "type:p2wsh",
-  v1_p2tr: "type:taproot",
+export const TYPE_FILTER_MASK = FILTERS
+  .filter(({ group }) => group === "type")
+  .reduce((mask, { bit }) => mask | bit, 0);
+
+export const TYPE_BITS = /** @type {const} */ ({
+  empty: getFilterBit("type:empty"),
+  multisig: getFilterBit("type:multisig"),
+  op_return: getFilterBit("type:op_return"),
+  p2a: getFilterBit("type:p2a"),
+  p2pk: getFilterBit("type:p2pk"),
+  p2pkh: getFilterBit("type:p2pkh"),
+  p2sh: getFilterBit("type:p2sh"),
+  unknown: getFilterBit("type:unknown"),
+  v0_p2wpkh: getFilterBit("type:p2wpkh"),
+  v0_p2wsh: getFilterBit("type:p2wsh"),
+  v1_p2tr: getFilterBit("type:taproot"),
 });
 
 /**
@@ -69,13 +73,4 @@ const TYPE_KEYS = /** @type {const} */ ({
  */
 export function getFilterBit(key) {
   return FILTER_BITS.get(key) ?? 0;
-}
-
-/**
- * @param {string} type
- */
-export function getTypeBit(type) {
-  const key = TYPE_KEYS[/** @type {keyof typeof TYPE_KEYS} */ (type)];
-
-  return key === undefined ? 0 : getFilterBit(key);
 }

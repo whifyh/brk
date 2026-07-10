@@ -1,11 +1,17 @@
 import { brk } from "../../../utils/client.js";
-import { FILTERS, getFilterBit, getTypeBit } from "./filters/model.js";
+import {
+  FILTERS,
+  TYPE_BITS,
+  TYPE_FILTER_MASK,
+  getFilterBit,
+} from "./filters/model.js";
 
-const VERSION_BITS = new Map([
-  [1, getFilterBit("version:1")],
-  [2, getFilterBit("version:2")],
-  [3, getFilterBit("version:3")],
-]);
+const VERSION_BITS = [
+  0,
+  getFilterBit("version:1"),
+  getFilterBit("version:2"),
+  getFilterBit("version:3"),
+];
 
 const RBF_YES_BIT = getFilterBit("rbf:yes");
 const RBF_NO_BIT = getFilterBit("rbf:no");
@@ -13,6 +19,11 @@ const INPUT_ONE_BIT = getFilterBit("input:one");
 const INPUT_MULTI_BIT = getFilterBit("input:multi");
 const OUTPUT_ONE_BIT = getFilterBit("output:one");
 const OUTPUT_MULTI_BIT = getFilterBit("output:multi");
+const FILTER_INDEX_BY_BIT = FILTERS.reduce((indexes, { bit, index }) => {
+  indexes[bit] = index;
+
+  return indexes;
+}, /** @type {Record<number, number>} */ ({}));
 
 /**
  * @template T
@@ -73,11 +84,8 @@ export async function loadBlockPreview(block, signal) {
 
   return {
     range: { start, end },
-    transactions: weights.data.map((weight, index) => ({
-      txIndex: start + index,
-      weight: /** @type {number} */ (weight),
-      feeRate: /** @type {number} */ (feeRates.data[index]),
-    })),
+    feeRates: /** @type {number[]} */ (feeRates.data),
+    weights: /** @type {number[]} */ (weights.data),
   };
 }
 
@@ -112,8 +120,11 @@ function rangeEnd(starts, counts) {
  * @param {number} mask
  */
 function countMask(counts, mask) {
-  for (const { bit, index } of FILTERS) {
-    if (mask & bit) counts[index] += 1;
+  while (mask) {
+    const bit = mask & -mask;
+
+    counts[FILTER_INDEX_BY_BIT[bit]] += 1;
+    mask ^= bit;
   }
 }
 
@@ -126,7 +137,8 @@ function getTypesMask(types, start, end) {
   let mask = 0;
 
   for (let index = start; index < end; index += 1) {
-    mask |= getTypeBit(types[index]);
+    mask |= TYPE_BITS[/** @type {keyof typeof TYPE_BITS} */ (types[index])] ?? 0;
+    if (mask === TYPE_FILTER_MASK) return mask;
   }
 
   return mask;
@@ -186,7 +198,8 @@ export async function loadBlockPreviewFilters(range, signal) {
   const masks = new Uint32Array(end - start);
   const counts = new Uint32Array(FILTERS.length);
 
-  versions.data.forEach((version, index) => {
+  for (let index = 0; index < versions.data.length; index += 1) {
+    const version = /** @type {number} */ (versions.data[index]);
     const inputCount = /** @type {number} */ (inputCounts.data[index]);
     const outputCount = /** @type {number} */ (outputCounts.data[index]);
     const inputTypeStart = /** @type {number} */ (firstInputs.data[index]);
@@ -194,7 +207,7 @@ export async function loadBlockPreviewFilters(range, signal) {
     const outputTypeStart = /** @type {number} */ (firstOutputs.data[index]);
     const outputTypeEnd = outputTypeStart + outputCount;
     const mask =
-      (VERSION_BITS.get(/** @type {number} */ (version)) ?? 0) |
+      (VERSION_BITS[version] ?? 0) |
       (rbfs.data[index] ? RBF_YES_BIT : RBF_NO_BIT) |
       (inputCount === 1 ? INPUT_ONE_BIT : INPUT_MULTI_BIT) |
       (outputCount === 1 ? OUTPUT_ONE_BIT : OUTPUT_MULTI_BIT) |
@@ -211,7 +224,7 @@ export async function loadBlockPreviewFilters(range, signal) {
 
     masks[index] = mask;
     countMask(counts, mask);
-  });
+  }
 
   return { counts, masks, start };
 }
@@ -220,6 +233,13 @@ export async function loadBlockPreviewFilters(range, signal) {
  * @typedef {Object} BlockPreviewRange
  * @property {number} start
  * @property {number} end
+ */
+
+/**
+ * @typedef {Object} BlockPreviewData
+ * @property {BlockPreviewRange} range
+ * @property {number[]} weights
+ * @property {number[]} feeRates
  */
 
 /**

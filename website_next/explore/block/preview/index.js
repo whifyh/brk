@@ -47,14 +47,14 @@ function memoize(load) {
 }
 
 /**
- * @param {BlockPreviewTransaction[]} transactions
+ * @param {BlockPreviewData} data
  * @param {() => Promise<BlockPreviewFilterState>} loadFilters
  * @param {AbortSignal} signal
  */
-function createPreview(transactions, loadFilters, signal) {
+function createPreview(data, loadFilters, signal) {
   const loadFilterState = memoize(loadFilters);
   const inspector = createBlockPreviewInspector(signal, loadFilterState);
-  const heatmap = createBlockPreviewHeatmap(transactions, {
+  const heatmap = createBlockPreviewHeatmap(data, {
     onInspect: inspector.inspect,
   });
   const filters = createPreviewFilters(loadFilterState, heatmap);
@@ -94,11 +94,11 @@ export function createBlockPreviewPane(block) {
   renderStatus(content, "Loading");
 
   void loadBlockPreview(block, controller.signal)
-    .then(({ range, transactions }) => {
+    .then((data) => {
       if (!live) return;
       const preview = createPreview(
-        transactions,
-        () => loadBlockPreviewFilters(range, controller.signal),
+        data,
+        () => loadBlockPreviewFilters(data.range, controller.signal),
         controller.signal,
       );
 
@@ -122,7 +122,7 @@ export function createBlockPreviewPane(block) {
   };
 }
 
-/** @typedef {import("./data.js").BlockPreviewTransaction} BlockPreviewTransaction */
+/** @typedef {import("./data.js").BlockPreviewData} BlockPreviewData */
 /** @typedef {import("./data.js").BlockPreviewFilterState} BlockPreviewFilterState */
 
 /**

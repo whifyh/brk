@@ -3,12 +3,12 @@ const OVERLAY_MARGIN = 8;
 /**
  * @param {HTMLElement} element
  * @param {BlockPreviewPointer} point
+ * @param {BlockPreviewReadoutSize} size
  */
-export function placeReadout(element, point) {
+export function placeReadout(element, point, size) {
   const figure = /** @type {HTMLElement} */ (element.parentElement);
   const bounds = figure.getBoundingClientRect();
-  const width = element.offsetWidth;
-  const height = element.offsetHeight;
+  const { width, height } = size;
   const minX = Math.min(bounds.width / 2, width / 2 + OVERLAY_MARGIN);
   const maxX = Math.max(minX, bounds.width - minX);
   const rawX = point.clientX - bounds.left;
@@ -30,4 +30,10 @@ export function placeReadout(element, point) {
  * @typedef {Object} BlockPreviewPointer
  * @property {number} clientX
  * @property {number} clientY
+ */
+
+/**
+ * @typedef {Object} BlockPreviewReadoutSize
+ * @property {number} width
+ * @property {number} height
  */

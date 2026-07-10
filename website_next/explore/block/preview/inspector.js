@@ -50,6 +50,7 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
   const txidLoader = createTxidLoader(parentSignal);
   let inspected = /** @type {BlockPreviewTransaction | null} */ (null);
   let point = /** @type {BlockPreviewPointer | null} */ (null);
+  let readoutSize = /** @type {BlockPreviewReadoutSize | null} */ (null);
   let filterState = /** @type {BlockPreviewFilterState | null} */ (null);
   let filterPromise = /** @type {Promise<void> | null} */ (null);
   let traitsTimer = 0;
@@ -62,7 +63,24 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
     txidLoader.abort();
   }
 
+  function invalidateReadoutSize() {
+    readoutSize = null;
+  }
+
+  /**
+   * @param {BlockPreviewPointer} nextPoint
+   */
+  function place(nextPoint) {
+    readoutSize ??= {
+      height: element.offsetHeight,
+      width: element.offsetWidth,
+    };
+    placeReadout(element, nextPoint, readoutSize);
+  }
+
   function setTraitsLoading() {
+    invalidateReadoutSize();
+
     for (const { value } of traitFields) {
       value.removeAttribute("title");
       setField(value, "loading", true);
@@ -71,6 +89,8 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
 
   /** @param {number} mask */
   function setTraits(mask) {
+    invalidateReadoutSize();
+
     for (const { filters, value } of traitFields) {
       const labels = filters
         .filter(({ bit }) => mask & bit)
@@ -88,7 +108,7 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
     const mask = state.masks[transaction.txIndex - state.start];
 
     setTraits(mask);
-    if (point !== null) placeReadout(element, point);
+    if (point !== null) place(point);
   }
 
   function loadFilterState() {
@@ -141,12 +161,15 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
 
     element.hidden = false;
     point = nextPoint;
-    placeReadout(element, nextPoint);
 
-    if (transaction === inspected) return;
+    if (transaction === inspected) {
+      place(nextPoint);
+      return;
+    }
 
     abortPending();
     inspected = transaction;
+    invalidateReadoutSize();
 
     setField(tx, `#${formatNumber(transaction.txIndex)}`);
     setField(fee, `${formatFeeRate(transaction.feeRate)} sat/vB`);
@@ -159,8 +182,10 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
       (loadedTxid) => {
         if (inspected !== transaction) return;
 
+        invalidateReadoutSize();
         setField(txid, loadedTxid);
         txid.title = loadedTxid;
+        if (point !== null) place(point);
       },
       (error, signal) => {
         if (signal.aborted) return;
@@ -173,6 +198,8 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
       txid.removeAttribute("title");
       setField(txid, "loading", true);
     }
+
+    place(nextPoint);
   }
 
   return /** @type {const} */ ({
@@ -189,4 +216,10 @@ export function createBlockPreviewInspector(parentSignal, loadFilters) {
  * @typedef {Object} BlockPreviewPointer
  * @property {number} clientX
  * @property {number} clientY
+ */
+
+/**
+ * @typedef {Object} BlockPreviewReadoutSize
+ * @property {number} width
+ * @property {number} height
  */

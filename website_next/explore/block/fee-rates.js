@@ -19,23 +19,6 @@ export const FEE_RATE_STOPS = /** @type {const} */ ([
 ]);
 
 /**
- * @param {number[]} values
- * @param {number} percentile
- */
-function percentileValue(values, percentile) {
-  return values[Math.round((percentile / 100) * (values.length - 1))];
-}
-
-/** @param {number[]} feeRates */
-export function createFeeRateRange(feeRates) {
-  feeRates.sort((a, b) => a - b);
-
-  return FEE_RATE_PERCENTILES.map((percentile) => {
-    return percentileValue(feeRates, percentile);
-  });
-}
-
-/**
  * @param {number} feeRate
  * @param {number[]} ranges
  */
