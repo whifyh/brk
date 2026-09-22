@@ -4,8 +4,17 @@ RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/li
 
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
-COPY crates crates
+# Copy the whole repo rather than selected directories: the tree uses symlinks
+# that cross top-level directory boundaries, so copying only some of them leaves
+# dangling links.
+#
+#   examples/custom_plugin          declared workspace member in Cargo.toml
+#   crates/bitview_website/website  symlink -> ../../website
+#   website/scripts/modules         symlink -> ../../modules
+#
+# include_dir! walks the embedded directory eagerly, so any dangling link inside
+# it panics the proc macro at compile time.
+COPY . .
 
 RUN cargo build --release --locked -p bitviewd
 
